@@ -128,7 +128,7 @@
 #' @export
 splatSimulate <- function(params = newSplatParams(),
                           method = c("single", "groups", "paths"),
-                          verbose = TRUE, ...) {
+                          verbose = TRUE, use.genes.means=NULL, ...) {
 
     checkmate::assertClass(params, "SplatParams")
 
@@ -146,6 +146,13 @@ splatSimulate <- function(params = newSplatParams(),
     # Get the parameters we are going to use
     nCells <- getParam(params, "nCells")
     nGenes <- getParam(params, "nGenes")
+
+    if ( (! is.null(use.genes.means)) && length(use.genes.means) != nGenes) {
+        warning("use.genes.means in effect, and gene count differs from nGenes of params, using use.genes.means count instead")
+        nGenes <- length(use.genes.means)
+        params <- setParams(params, "nGenes"=nGenes)
+    }
+    
     nBatches <- getParam(params, "nBatches")
     batch.cells <- getParam(params, "batchCells")
     nGroups <- getParam(params, "nGroups")
@@ -191,7 +198,7 @@ splatSimulate <- function(params = newSplatParams(),
     if (verbose) {message("Simulating library sizes...")}
     sim <- splatSimLibSizes(sim, params)
     if (verbose) {message("Simulating gene means...")}
-    sim <- splatSimGeneMeans(sim, params)
+    sim <- splatSimGeneMeans(sim, params, use.genes.means)
     if (nBatches > 1) {
         if (verbose) {message("Simulating batch effects...")}
         sim <- splatSimBatchEffects(sim, params)
@@ -293,7 +300,7 @@ splatSimLibSizes <- function(sim, params) {
 #'
 #' @importFrom SummarizedExperiment rowData rowData<-
 #' @importFrom stats rgamma median
-splatSimGeneMeans <- function(sim, params) {
+splatSimGeneMeans <- function(sim, params, use.genes.means) {
 
     nGenes <- getParam(params, "nGenes")
     mean.shape <- getParam(params, "mean.shape")
@@ -302,9 +309,14 @@ splatSimGeneMeans <- function(sim, params) {
     out.facLoc <- getParam(params, "out.facLoc")
     out.facScale <- getParam(params, "out.facScale")
 
-    # Simulate base gene means
-    base.means.gene <- rgamma(nGenes, shape = mean.shape, rate = mean.rate)
 
+    if (! is.null(use.genes.means)) {
+        base.means.gene <- use.genes.means
+    } else {
+        ## Simulate base gene means
+        base.means.gene <- rgamma(nGenes, shape = mean.shape, rate = mean.rate)
+    }
+    
     # Add expression outliers
     outlier.facs <- getLNormFactors(nGenes, out.prob, 0, out.facLoc,
                                     out.facScale)
@@ -317,7 +329,7 @@ splatSimGeneMeans <- function(sim, params) {
     rowData(sim)$BaseGeneMean <- base.means.gene
     rowData(sim)$OutlierFactor <- outlier.facs
     rowData(sim)$GeneMean <- means.gene
-
+    
     return(sim)
 }
 
